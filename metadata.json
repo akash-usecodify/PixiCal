@@ -1,0 +1,6 @@
+{
+  "name": "PixiCal - Snap Your Food. Know Your Calories.",
+  "description": "Snap your food photos to analyze items, calculate calories, break down macronutrients, and maintain a personal daily nutrition log. Installable mobile web app optimized for Android and iOS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

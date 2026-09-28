@@ -1,0 +1,33 @@
+{
+  "id": "/",
+  "name": "PixiCal - Snap Your Food. Know Your Calories.",
+  "short_name": "PixiCal",
+  "description": "Snap your food photos to analyze items, calculate calories, break down macronutrients, and track your daily nutrition history.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#080C16",
+  "background_color": "#080C16",
+  "categories": ["health", "fitness", "food", "lifestyle"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
