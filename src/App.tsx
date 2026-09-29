@@ -134,18 +134,40 @@ export default function App() {
         }),
       });
 
-      const data = await response.json();
+      // Safely read response as text first to guard against non-JSON (HTML 413, 502, 504 errors)
+      let responseText = '';
+      try {
+        responseText = await response.text();
+      } catch {
+        throw new Error('Network error reading server response. Please tap "Retry Snap".');
+      }
+
+      let data: any = null;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseErr) {
+        console.error('[PixiCal Client] Failed to parse response as JSON. Status:', response.status, responseText.slice(0, 200));
+        if (response.status === 413) {
+          throw new Error('Image size is too large. Please take a new snapshot or choose a smaller photo.');
+        } else if (response.status === 504 || response.status === 502) {
+          throw new Error('Vision analysis timed out. Please tap "Retry Snap" in a moment.');
+        } else if (!response.ok) {
+          throw new Error(`Server temporarily unavailable (${response.status}). Please try again in a moment.`);
+        } else {
+          throw new Error('Unexpected response format from computer vision service. Please retry.');
+        }
+      }
 
       if (!response.ok) {
-        let msg = data.error || 'Computer vision service temporarily unavailable';
-        if (typeof msg === 'string' && msg.includes('{')) {
+        let msg = data?.error || 'Computer vision service temporarily unavailable';
+        if (typeof msg === 'string' && (msg.includes('{') || msg.includes('Unexpected token'))) {
           try {
             const parsed = JSON.parse(msg);
             if (parsed.error?.message) {
               msg = parsed.error.message;
             }
           } catch {
-            // Keep original
+            msg = 'Vision recognition encountered a temporary issue. Please tap "Retry Snap".';
           }
         }
         throw new Error(msg);
@@ -164,6 +186,9 @@ export default function App() {
       if (friendlyError.includes('503') || friendlyError.includes('high demand')) {
         friendlyError =
           'Vision models are currently at high capacity. Please tap "Retry Snap" in a moment.';
+      } else if (friendlyError.includes('Unexpected token') || friendlyError.includes('not valid JSON')) {
+        friendlyError =
+          'Server returned an unreadable response format. Please tap "Retry Snap".';
       }
       setErrorMessage(friendlyError);
       showToast('Vision recognition encountered an issue', 'error');

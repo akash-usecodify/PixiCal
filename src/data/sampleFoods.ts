@@ -106,7 +106,10 @@ const createCulinaryPlatterSvg = (
       ${subtitle}
     </text>
   </svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  const base64Data = typeof btoa !== 'undefined'
+    ? btoa(unescape(encodeURIComponent(svg)))
+    : Buffer.from(svg).toString('base64');
+  return `data:image/svg+xml;base64,${base64Data}`;
 };
 
 export const SAMPLE_MEALS: SampleMeal[] = [

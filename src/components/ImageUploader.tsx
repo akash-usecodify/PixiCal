@@ -63,11 +63,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      const rawDataUrl = e.target?.result as string;
+      const rawDataUrl = (e.target?.result as string) || '';
       const img = new Image();
       img.onload = () => {
-        // Downscale large camera photos to max 1280px to optimize network upload
-        const maxDim = 1280;
+        // Downscale large camera photos to max 1024px to ensure fast, reliable upload
+        const maxDim = 1024;
         let { width, height } = img;
         if (width > maxDim || height > maxDim) {
           if (width > height) {
@@ -84,7 +84,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const compressed = canvas.toDataURL('image/jpeg', 0.85);
+          const compressed = canvas.toDataURL('image/jpeg', 0.82);
           setSelectedImage(compressed);
           setMimeType('image/jpeg');
         } else {
@@ -94,7 +94,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       };
       img.onerror = () => {
         setSelectedImage(rawDataUrl);
-        setMimeType('image/jpeg');
+        setMimeType(file.type || 'image/jpeg');
       };
       img.src = rawDataUrl;
     };
@@ -145,7 +145,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     const ctx = canvas.getContext('2d');
     if (ctx) {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
       setSelectedImage(dataUrl);
       setMimeType('image/jpeg');
       stopCamera();
@@ -159,35 +159,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   }, [stopCamera]);
 
   const handleSelectSample = (sample: SampleMeal) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = 640;
-        canvas.height = 420;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0);
-          const jpegData = canvas.toDataURL('image/jpeg', 0.92);
-          setSelectedImage(jpegData);
-          setMimeType('image/jpeg');
-        } else {
-          setSelectedImage(sample.svgDataUrl);
-          setMimeType('image/svg+xml');
-        }
-      } catch {
-        setSelectedImage(sample.svgDataUrl);
-        setMimeType('image/svg+xml');
-      }
-    };
-    img.onerror = () => {
-      setSelectedImage(sample.svgDataUrl);
-      setMimeType('image/svg+xml');
-    };
-    img.src = sample.svgDataUrl;
+    setSelectedImage(sample.svgDataUrl);
+    setMimeType('image/svg+xml');
     setUserNotes(`Sample meal: ${sample.name}. ${sample.description}. ${sample.chefCues}`);
   };
 
