@@ -16,6 +16,22 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 // Allow large image uploads (base64)
 app.use(express.json({ limit: '25mb' }));
 
+// CORS & Preflight middleware to support all client contexts (iframes, cross-origin, custom headers)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
+// Health check endpoint
+app.get(['/api/health', '/api/analyze-food'], (_req, res) => {
+  return res.json({ status: 'ok', service: 'PixiCal Food Vision API', uptime: process.uptime() });
+});
+
 // Custom JSON error middleware to prevent HTML error responses from Express
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (err) {
@@ -268,8 +284,8 @@ async function generateFoodAnalysisWithFallback(cleanBase64: string, mimeType: s
   throw lastError;
 }
 
-// API: Analyze Food Image
-app.post('/api/analyze-food', async (req, res) => {
+// API: Analyze Food Image (supports both with and without trailing slash)
+app.post(['/api/analyze-food', '/api/analyze-food/'], async (req, res) => {
   try {
     const { imageBase64, mimeType = 'image/jpeg', notes } = req.body || {};
 
