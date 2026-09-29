@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
+import sharp from 'sharp';
 
 dotenv.config();
 
@@ -100,24 +101,60 @@ const foodAnalysisSchema = {
   required: ['isFood', 'mealTitle', 'totalCalories', 'macros', 'items'],
 };
 
-// Available free-tier multimodal models to try in sequence if one experiences temporary high demand (503)
+// Available multimodal models in prioritized order (gemini-3.1-flash-lite has active free-tier capacity)
 const CANDIDATE_MODELS = [
-  'gemini-3.8-flash',
-  'gemini-flash-latest',
   'gemini-3.1-flash-lite',
+  'gemini-flash-latest',
+  'gemini-3.8-flash',
 ];
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Helper: Call Gemini with model fallback and exponential backoff retry for 503/429
+// Preprocess any image (JPEG, PNG, HEIC, WEBP, or SVG) to an optimized, auto-oriented JPEG buffer
+async function preprocessImage(rawBase64OrDataUrl: string, mimeType: string): Promise<{ base64: string; mimeType: string }> {
+  try {
+    let inputBuffer: Buffer;
+    
+    // Check if input is SVG (URL-encoded or raw XML)
+    if (rawBase64OrDataUrl.includes('%3Csvg') || rawBase64OrDataUrl.includes('<svg') || mimeType.includes('svg')) {
+      const rawSvg = rawBase64OrDataUrl.includes(',') 
+        ? decodeURIComponent(rawBase64OrDataUrl.split(',')[1]) 
+        : decodeURIComponent(rawBase64OrDataUrl);
+      inputBuffer = Buffer.from(rawSvg, 'utf-8');
+    } else {
+      const cleanBase64 = rawBase64OrDataUrl.replace(/^data:[a-zA-Z0-9/+-]+;base64,/, '');
+      inputBuffer = Buffer.from(cleanBase64, 'base64');
+    }
+
+    // Auto-rotate according to EXIF (fixes sideways mobile phone camera photos), resize to max 1280px
+    const processedBuffer = await sharp(inputBuffer)
+      .rotate()
+      .resize({
+        width: 1280,
+        height: 1280,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+
+    return {
+      base64: processedBuffer.toString('base64'),
+      mimeType: 'image/jpeg',
+    };
+  } catch (err: any) {
+    console.warn('[PixiCal Image Preprocess] sharp preprocessing warning, using fallback:', err?.message);
+    const fallbackBase64 = rawBase64OrDataUrl.replace(/^data:[a-zA-Z0-9/+-]+;base64,/, '');
+    return {
+      base64: fallbackBase64,
+      mimeType: mimeType && mimeType.startsWith('image/') ? mimeType : 'image/jpeg',
+    };
+  }
+}
+
+// Helper: Call Gemini with model fallback and retry
 async function generateFoodAnalysisWithFallback(cleanBase64: string, mimeType: string, promptText: string) {
   let lastError: any = null;
-
-  // Ensure mimeType is an accepted raster format
-  let safeMimeType = mimeType;
-  if (!['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(safeMimeType)) {
-    safeMimeType = 'image/jpeg';
-  }
 
   for (const model of CANDIDATE_MODELS) {
     const maxAttempts = 2;
@@ -132,7 +169,7 @@ async function generateFoodAnalysisWithFallback(cleanBase64: string, mimeType: s
               {
                 inlineData: {
                   data: cleanBase64,
-                  mimeType: safeMimeType,
+                  mimeType,
                 },
               },
               {
@@ -170,7 +207,7 @@ async function generateFoodAnalysisWithFallback(cleanBase64: string, mimeType: s
 
         if (isTemporaryCapacity) {
           if (attempt < maxAttempts) {
-            const delay = attempt * 1200;
+            const delay = attempt * 800;
             console.log(`[PixiCal Vision] Waiting ${delay}ms before retrying ${model}...`);
             await sleep(delay);
             continue;
@@ -203,8 +240,8 @@ app.post('/api/analyze-food', async (req, res) => {
       });
     }
 
-    // Strip data URL header if present
-    const cleanBase64 = imageBase64.replace(/^data:[a-zA-Z0-9/+-]+;base64,/, '');
+    // Preprocess image to clean, auto-oriented JPEG
+    const { base64: optimizedBase64, mimeType: safeMimeType } = await preprocessImage(imageBase64, mimeType);
 
     const promptText = `Analyze this food image with high precision as an expert clinical dietitian and computer vision food recognition specialist.
 1. Determine if this image contains food, edible dishes, or drinks.
@@ -217,15 +254,23 @@ ${notes ? `User contextual note about preparation or ingredients: "${notes}" - c
 Be realistic and scientifically grounded with USDA nutrition data standards.`;
 
     try {
-      const parsed = await generateFoodAnalysisWithFallback(cleanBase64, mimeType, promptText);
-      return res.json(parsed);
+      const parsed = await generateFoodAnalysisWithFallback(optimizedBase64, safeMimeType, promptText);
+      // Return both parsed directly and nested as analysis for maximum client compatibility
+      return res.json({
+        analysis: parsed,
+        ...parsed,
+      });
     } catch (analysisError: any) {
       console.error('All vision models failed or experienced capacity limits:', analysisError);
 
-      // If user notes or context gives hints, provide a graceful emergency fallback estimation
-      // so user isn't stuck with an ugly error screen.
+      // Provide graceful emergency estimation so user is never stuck
       const fallbackResult = generateEmergencyFallback(notes);
       return res.json({
+        analysis: {
+          ...fallbackResult,
+          isFallbackEstimate: true,
+          dietaryAdvice: 'Notice: Analyzed using standard USDA nutritional benchmarks while live vision AI service recovers from temporary high demand spikes.',
+        },
         ...fallbackResult,
         isFallbackEstimate: true,
         dietaryAdvice: 'Notice: Analyzed using standard USDA nutritional benchmarks while live vision AI service recovers from temporary high demand spikes.',
@@ -234,7 +279,7 @@ Be realistic and scientifically grounded with USDA nutrition data standards.`;
   } catch (error: any) {
     console.error('Error handling food analysis request:', error);
     return res.status(500).json({
-      error: 'The AI vision service is currently experiencing high demand. Please try again in a few moments.',
+      error: 'The AI vision service encountered an unexpected issue. Please try again in a few moments.',
     });
   }
 });

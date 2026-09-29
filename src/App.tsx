@@ -151,8 +151,13 @@ export default function App() {
         throw new Error(msg);
       }
 
-      setCurrentAnalysis(data.analysis);
-      showToast('Plate analyzed successfully!', 'success');
+      const analysis: MealAnalysis = data.analysis || data;
+      if (!analysis || (!analysis.mealTitle && analysis.totalCalories === undefined)) {
+        throw new Error('Analysis completed but did not return recognizable meal information.');
+      }
+
+      setCurrentAnalysis(analysis);
+      showToast('Plate analyzed successfully! 🥑', 'success');
     } catch (err: any) {
       let friendlyError =
         err.message || 'Could not analyze food image. Please check lighting or retry.';

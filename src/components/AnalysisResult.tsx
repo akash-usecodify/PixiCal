@@ -55,9 +55,10 @@ export const AnalysisResult: React.FC<AnalysisResultProps> = ({
   const [saveNotes, setSaveNotes] = useState<string>('');
   const [savedSuccess, setSavedSuccess] = useState<boolean>(isSaved);
 
-  const totalCalories = analysis.totalCalories || 0;
+  const items = Array.isArray(analysis?.items) ? analysis.items : [];
   const { protein = 0, carbs = 0, fat = 0, fiber = 0, sugar = 0, sodium = 0 } =
-    analysis.macros || {};
+    analysis?.macros || {};
+  const totalCalories = analysis?.totalCalories || (protein * 4 + carbs * 4 + fat * 9) || 0;
 
   // Calculate macro calorie percentages
   const proteinKcal = protein * 4;
@@ -148,7 +149,7 @@ export const AnalysisResult: React.FC<AnalysisResultProps> = ({
                 )}
 
                 <span className="text-[11px] font-bold text-slate-400 font-cute">
-                  {analysis.items.length} items detected
+                  {items.length} items detected
                 </span>
               </div>
 
@@ -300,7 +301,7 @@ export const AnalysisResult: React.FC<AnalysisResultProps> = ({
               </div>
 
               <div className="h-3 w-full bg-slate-900 rounded-full overflow-hidden flex border border-slate-700">
-                {analysis.items.map((item, idx) => {
+                {items.map((item, idx) => {
                   const sharePct = Math.max(
                     3,
                     Math.round(((item.calories || 0) / (totalCalories || 1)) * 100)
@@ -318,7 +319,7 @@ export const AnalysisResult: React.FC<AnalysisResultProps> = ({
               </div>
 
               <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs font-bold font-cute">
-                {analysis.items.map((item, idx) => {
+                {items.map((item, idx) => {
                   const sharePct = Math.round(
                     ((item.calories || 0) / (totalCalories || 1)) * 100
                   );
@@ -343,12 +344,12 @@ export const AnalysisResult: React.FC<AnalysisResultProps> = ({
                 <span>Components &amp; Breakdown</span>
               </h3>
               <span className="text-xs font-bold font-cute text-[#00C853] bg-[#00C853]/15 px-2.5 py-0.5 rounded-lg border border-[#00C853]/30">
-                {analysis.items.length} Items 🥑
+                {items.length} Items 🥑
               </span>
             </div>
 
             <div className="space-y-2.5">
-              {analysis.items.map((item, idx) => {
+              {items.map((item, idx) => {
                 const color = itemColors[idx % itemColors.length];
                 return (
                   <div

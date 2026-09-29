@@ -60,10 +60,43 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       alert('Please upload an image file (JPG, PNG, WEBP, etc.)');
       return;
     }
-    setMimeType(file.type);
+
     const reader = new FileReader();
     reader.onload = (e) => {
-      setSelectedImage(e.target?.result as string);
+      const rawDataUrl = e.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        // Downscale large camera photos to max 1280px to optimize network upload
+        const maxDim = 1280;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.85);
+          setSelectedImage(compressed);
+          setMimeType('image/jpeg');
+        } else {
+          setSelectedImage(rawDataUrl);
+          setMimeType('image/jpeg');
+        }
+      };
+      img.onerror = () => {
+        setSelectedImage(rawDataUrl);
+        setMimeType('image/jpeg');
+      };
+      img.src = rawDataUrl;
     };
     reader.readAsDataURL(file);
   };
@@ -127,26 +160,32 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
   const handleSelectSample = (sample: SampleMeal) => {
     const img = new Image();
+    img.crossOrigin = 'anonymous';
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 640;
-      canvas.height = 420;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-        const jpegData = canvas.toDataURL('image/jpeg', 0.92);
-        setSelectedImage(jpegData);
-        setMimeType('image/jpeg');
-      } else {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 420;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+          const jpegData = canvas.toDataURL('image/jpeg', 0.92);
+          setSelectedImage(jpegData);
+          setMimeType('image/jpeg');
+        } else {
+          setSelectedImage(sample.svgDataUrl);
+          setMimeType('image/svg+xml');
+        }
+      } catch {
         setSelectedImage(sample.svgDataUrl);
-        setMimeType('image/jpeg');
+        setMimeType('image/svg+xml');
       }
     };
     img.onerror = () => {
       setSelectedImage(sample.svgDataUrl);
-      setMimeType('image/jpeg');
+      setMimeType('image/svg+xml');
     };
     img.src = sample.svgDataUrl;
     setUserNotes(`Sample meal: ${sample.name}. ${sample.description}. ${sample.chefCues}`);
